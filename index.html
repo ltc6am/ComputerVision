@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Detective: Professional Training (V18)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fafc; overflow-x: hidden; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .module-card { background: #1e293b; border: 2px solid #334155; transition: all 0.2s ease; min-width: 160px; }
+        .module-card.active { border-color: #10b981; background: #0f172a; box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
+        .module-card.locked { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.8); }
+        .pixel-cell { transition: all 0.1s ease; cursor: crosshair; }
+        .pixel-cell:hover { transform: scale(1.1); outline: 2px solid #10b981; z-index: 10; }
+        .try-dot { width: 8px; height: 8px; border-radius: 50%; background: #334155; }
+        .try-dot.used { background: #ef4444; box-shadow: 0 0 5px #ef4444; }
+        
+        .noise-overlay { position: relative; }
+        .noise-overlay::after {
+            content: ""; position: absolute; inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15; pointer-events: none; border-radius: inherit;
+        }
+
+        @keyframes pulse-emerald {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .active-pulse { animation: pulse-emerald 2s infinite; }
+        
+        .library-scroll { 
+            scrollbar-width: thin; 
+            scrollbar-color: #10b981 #0f172a; 
+            overflow-y: auto;
+        }
+        .library-scroll::-webkit-scrollbar { width: 6px; }
+        .library-scroll::-webkit-scrollbar-track { background: #0f172a; }
+        .library-scroll::-webkit-scrollbar-thumb { background: #10b981; border-radius: 10px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <div class="bg-emerald-500 p-2 rounded-xl cursor-pointer hover:rotate-12 transition-transform" onclick="showAdminPrompt()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tighter text-white uppercase italic">AI Detective <span class="text-emerald-500">Pro V18</span></h1>
+                    <p class="text-[10px] text-slate-500 font-bold tracking-[0.2em]">HK_CS_FORENSIC_MASTER_BUILD</p>
+                </div>
+            </div>
+            <div id="timer" class="mono text-emerald-400 bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 shadow-inner">00:00</div>
+        </div>
+    </header>
+
+    <nav class="bg-slate-900/50 border-b border-slate-800 p-2 overflow-x-auto">
+        <div id="module-menu" class="max-w-7xl mx-auto flex gap-3 px-4">
+            <!-- Modules injected here -->
+        </div>
+    </nav>
+
+    <main class="flex-1 max-w-6xl mx-auto w-full p-4 md:p-8">
+        <div id="game-screen" class="bg-slate-900 rounded-[2.5rem] border border-slate-800 p-4 md:p-10 shadow-2xl min-h-[650px] relative flex flex-col">
+            <div id="screen-content" class="h-full flex flex-col items-center">
+                <!-- Dynamic Content -->
+            </div>
+
+            <!-- Intro Briefing Modal -->
+            <div id="intro-modal" class="hidden absolute inset-0 z-[150] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6">
+                <div class="bg-slate-900 border-2 border-emerald-500/50 p-8 rounded-[2rem] max-w-xl w-full shadow-2xl">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div id="intro-icon" class="text-4xl bg-emerald-500/10 p-3 rounded-2xl">🔍</div>
+                        <h2 id="intro-title" class="text-3xl font-black text-white italic">Briefing</h2>
+                    </div>
+                    <div class="mb-4 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                        <h4 class="text-[10px] font-bold text-emerald-400 uppercase mb-1">Curriculum Concept</h4>
+                        <p id="intro-concept-text" class="text-slate-300 text-sm italic"></p>
+                    </div>
+                    <div class="mb-8">
+                        <h4 class="text-[10px] font-bold text-slate-500 uppercase mb-1">Instructions</h4>
+                        <p id="intro-instruction-text" class="text-slate-200 text-lg"></p>
+                    </div>
+                    <button onclick="dismissIntro()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-4 rounded-xl transition-all uppercase tracking-widest active-pulse">Accept Mission</button>
+                </div>
+            </div>
+
+            <!-- Label Prompt Modal -->
+            <div id="label-modal" class="hidden absolute inset-0 z-[180] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-6">
+                <div class="bg-slate-900 border-2 border-emerald-500 p-8 rounded-3xl max-w-sm w-full text-center">
+                    <h3 class="text-xl font-bold mb-2 text-white">Evidence Found!</h3>
+                    <p class="text-slate-400 mb-1 text-sm italic">Label this object using the word list:</p>
+                    <div id="label-tries-display" class="text-[10px] text-rose-500 font-bold mb-3 uppercase">Attempts Remaining: 3</div>
+                    <input type="text" id="label-input" class="w-full bg-slate-800 border-2 border-slate-700 p-4 rounded-xl mb-4 text-white font-bold outline-none focus:border-emerald-500 uppercase" placeholder="TYPE LABEL...">
+                    <button id="label-submit-btn" class="w-full bg-emerald-500 text-slate-950 font-black py-3 rounded-xl hover:bg-emerald-400 transition-colors">CONFIRM LABEL</button>
+                </div>
+            </div>
+
+            <!-- Message Overlay -->
+            <div id="msg-overlay" class="hidden absolute inset-0 z-[100] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-6">
+                <div class="bg-slate-900 border-2 border-emerald-500 p-10 rounded-[2rem] max-w-md w-full text-center shadow-2xl">
+                    <div id="msg-icon" class="text-6xl mb-6">✅</div>
+                    <h3 id="msg-title" class="text-2xl font-bold mb-4 text-white italic"></h3>
+                    <p id="msg-text" class="text-slate-400 mb-8"></p>
+                    <button id="msg-btn" class="w-full bg-emerald-500 text-slate-950 font-black py-4 rounded-xl hover:bg-emerald-400 transition-colors uppercase tracking-widest">Acknowledge</button>
+                </div>
+            </div>
+
+            <!-- Admin Overlay -->
+            <div id="admin-overlay" class="hidden absolute inset-0 z-[200] bg-slate-950/95 flex items-center justify-center p-6">
+                <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-sm shadow-2xl">
+                    <h3 class="mono text-emerald-500 text-sm mb-4 uppercase tracking-tighter">Teacher Bypass Terminal</h3>
+                    <input type="password" id="admin-pass" placeholder="Enter Access Key..." class="w-full bg-slate-800 border border-slate-700 p-4 rounded-xl mb-4 text-white mono outline-none focus:border-emerald-500">
+                    <div class="flex gap-3">
+                        <button onclick="checkAdmin()" class="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl">EXECUTE</button>
+                        <button onclick="closeAdmin()" class="flex-1 bg-slate-700 text-white font-bold py-3 rounded-xl">CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const state = {
+            modules: [
+                { 
+                    id: 0, name: "RGB Forensics", icon: "🎨", marks: 0, target: 20, completed: false, locked: false, attemptsThisRound: 0, maxRoundAttempts: 100,
+                    concept: "Computers represent color as numeric data (RGB). Higher pixel density makes forensic extraction much more difficult.",
+                    instruction: "Identify the signal matching the RGB numbers. Q1-18 (Training), Q19-50 (Medium), Q51-100 (Hard). Get 20 marks to proceed."
+                },
+                { 
+                    id: 1, name: "Classification", icon: "🎯", marks: 0, target: 20, completed: false, locked: true, currentLevel: 0, totalLevels: 50,
+                    concept: "Image Classification groups data into categories based on official labels.",
+                    instruction: "Feed Analysis: Identify the Emoticon Class. Reference the library below the question. Blur increases after level 10 and 20!"
+                },
+                { 
+                    id: 2, name: "Detection", icon: "🔎", marks: 0, target: 20, completed: false, locked: true, currentLevel: 0, totalLevels: 50,
+                    concept: "Detection identifies 'Where' objects are. Each found object must be precisely labeled to train the Computer Vision model.",
+                    instruction: "Search Marathon: Locate all evidence boxes in each scene. Q1-10: 3 objects. Q11-20: 5 objects. Q21+: 6 objects! Label correctly to earn marks."
+                },
+                { 
+                    id: 3, name: "Potentials & Limits", icon: "⚖️", marks: 0, target: 10, completed: false, locked: true, currentLevel: 0, totalLevels: 20,
+                    concept: "AI vision has great potential (Benefits) but also clear technical boundaries (Limitations).",
+                    instruction: "Case Review: Analyze the scene. Q1-10 show limited options. Q11-20 show all 6 curriculum categories. Get 10 marks to win."
+                }
+            ],
+            currentModuleIdx: 0,
+            rgbTries: 0,
+            startTime: Date.now(),
+            detectionAttempts: 0,
+            detectionSubCount: 0
+        };
+
+        const allPotentialLimits = [
+            "Increase Automation & Efficiency", 
+            "Enhance Safety & Convenience", 
+            "Secure Personalization", 
+            "Data Dependency & Bias", 
+            "Environmental Sensitivity", 
+            "Lack of Human Context"
+        ];
+
+        const chartData = [
+            { img: "😀", name: "GRINNING" }, { img: "😄", name: "SMILE" }, { img: "😃", name: "SMILEY" }, { img: "😬", name: "GRIMACING" }, { img: "😁", name: "GRIN" },
+            { img: "😌", name: "RELIEVED" }, { img: "😊", name: "RELAXED" }, { img: "😊", name: "BLUSH" }, { img: "🙂", name: "SLIGHTLY SMILE FACE" }, { img: "😉", name: "WINK" },
+            { img: "😇", name: "INNOCENT" }, { img: "😆", name: "LAUGHING" }, { img: "😅", name: "SWEAT SMILE" }, { img: "😂", name: "JOY" }, { img: "😋", name: "YUM" },
+            { img: "😢", name: "CRY" }, { img: "😭", name: "SOB" }, { img: "😓", name: "SWEAT" }, { img: "😰", name: "COLD SWEAT" }, { img: "😨", name: "FEARFUL" },
+            { img: "😱", name: "SCREAM" }, { img: "😡", name: "RAGE" }, { img: "😠", name: "ANGRY" }, { img: "😤", name: "TRIUMPH" }, { img: "😳", name: "FLUSHED" },
+            { img: "😴", name: "SLEEPING" }, { img: "🤓", name: "NERD" }, { img: "😎", name: "SUNGLASSES" }, { img: "😷", name: "MASK" }
+        ];
+
+        const emotionsData = [
+            { img: "😀", options: ["GRINNING", "SMILE"], correct: 0 },
+            { img: "😄", options: ["SMILE", "SMILEY"], correct: 0 },
+            { img: "😃", options: ["SMILEY", "GRINNING"], correct: 0 },
+            { img: "😬", options: ["GRIMACING", "SMILEY"], correct: 0 },
+            { img: "😁", options: ["GRIN", "GRINNING"], correct: 0 },
+            { img: "😌", options: ["RELIEVED", "RELAXED"], correct: 0 },
+            { img: "😊", options: ["RELAXED", "BLUSH"], correct: 1 },
+            { img: "🙂", options: ["SLIGHTLY SMILE FACE", "WINK"], correct: 0 },
+            { img: "😉", options: ["WINK", "SLIGHTLY SMILE FACE"], correct: 0 },
+            { img: "😇", options: ["INNOCENT", "LAUGHING"], correct: 0 },
+            { img: "😆", options: ["LAUGHING", "JOY"], correct: 0 },
+            { img: "😅", options: ["SWEAT SMILE", "LAUGHING"], correct: 0 },
+            { img: "😂", options: ["JOY", "YUM"], correct: 0 },
+            { img: "😋", options: ["YUM", "WINK"], correct: 0 },
+            { img: "😢", options: ["CRY", "SOB"], correct: 0 },
+            { img: "😭", options: ["SOB", "CRY"], correct: 0 },
+            { img: "😓", options: ["SWEAT", "COLD SWEAT"], correct: 0 },
+            { img: "😰", options: ["COLD SWEAT", "FEARFUL"], correct: 0 },
+            { img: "😨", options: ["FEARFUL", "SCREAM"], correct: 0 },
+            { img: "😱", options: ["SCREAM", "ANGRY"], correct: 0 },
+            { img: "😡", options: ["RAGE", "ANGRY"], correct: 0 },
+            { img: "😠", options: ["ANGRY", "RAGE"], correct: 0 },
+            { img: "😤", options: ["TRIUMPH", "FLUSHED"], correct: 0 },
+            { img: "😳", options: ["FLUSHED", "SCREAM"], correct: 0 },
+            { img: "😴", options: ["SLEEPING", "SLEEPY"], correct: 0 },
+            { img: "🤓", options: ["NERD", "SUNGLASSES"], correct: 0 },
+            { img: "😎", options: ["SUNGLASSES", "NERD"], correct: 0 },
+            { img: "😷", options: ["MASK", "TRIUMPH"], correct: 0 }
+        ];
+
+        const detectionObjects = [
+            { icon: "💾", name: "Disk" }, { icon: "📹", name: "Camera" }, { icon: "🔌", name: "Cable" }, 
+            { icon: "🗄️", name: "Server" }, { icon: "📦", name: "Box" }, { icon: "💻", name: "Laptop" },
+            { icon: "⌨️", name: "Keyboard" }, { icon: "🖱️", name: "Mouse" }, { icon: "📱", name: "Phone" }
+        ];
+
+        const curriculumCases = [
+            { case: "Scenario 1: Night Watch", desc: "A security camera at 2:00 AM misses a person because there are no streetlights.", img: "🌑", correct: "Environmental Sensitivity" },
+            { case: "Scenario 2: Factory Speed", desc: "A robotic arm uses CV to sort 5,000 eggs in one hour without getting tired.", img: "🥚", correct: "Increase Automation & Efficiency" },
+            { case: "Scenario 3: Smart Braking", desc: "A self-driving car detects a child running onto the road and stops instantly.", img: "🚗", correct: "Enhance Safety & Convenience" },
+            { case: "Scenario 4: The 6-Finger Error", desc: "An AI creates a photo of a hand, but it gives the hand 6 fingers by mistake.", img: "🖐️", correct: "Lack of Human Context" },
+            { case: "Scenario 5: Face ID", desc: "A smartphone only unlocks when it sees the owner's face, keeping the data safe.", img: "📱", correct: "Secure Personalization" },
+            { case: "Scenario 6: Sun Glare", desc: "A camera is blinded by a direct beam of sunlight and cannot see the traffic light.", img: "☀️", correct: "Environmental Sensitivity" },
+            { case: "Scenario 7: Forest Camouflage", desc: "AI misses a green bag sitting on green grass because the colors are too similar.", img: "🌲", correct: "Environmental Sensitivity" },
+            { case: "Scenario 8: Foggy Road", desc: "A computer cannot detect the car in front because of very thick smoke and fog.", img: "🌫️", correct: "Environmental Sensitivity" },
+            { case: "Scenario 9: Smart Shopping", desc: "A supermarket uses AI to track items so customers can pay without waiting in line.", img: "🛒", correct: "Increase Automation & Efficiency" },
+            { case: "Scenario 10: Mirror Ghost", desc: "AI sees a reflection in a mirror and thinks there are two people in the room.", img: "🪞", correct: "Lack of Human Context" },
+            { case: "Scenario 11: Shadow Scare", desc: "High-contrast shadows look like a solid wall to the AI, so it stops moving.", img: "👤", correct: "Environmental Sensitivity" },
+            { case: "Scenario 12: Photo Album", desc: "Your phone automatically groups all photos of 'Your Dog' into a private album for you.", img: "🐶", correct: "Secure Personalization" },
+            { case: "Scenario 13: Floating Object", desc: "AI generates a picture of a cup, but the cup is floating in the air against gravity.", img: "☕", correct: "Lack of Human Context" },
+            { case: "Scenario 14: Medical Assistant", desc: "AI scans 1,000 X-ray photos in seconds to find which ones show a broken bone.", img: "🩩", correct: "Increase Automation & Efficiency" },
+            { case: "Scenario 15: Polka-Dot Wall", desc: "A person in a patterned shirt stands in front of a matching wall and vanishes to the AI.", img: "⚪", correct: "Environmental Sensitivity" },
+            { case: "Scenario 16: Safe Parking", desc: "A car uses cameras to warn the driver about a tiny pole they couldn't see.", img: "🅿️", correct: "Enhance Safety & Convenience" },
+            { case: "Scenario 17: Neon Night", desc: "Flashing neon signs make the AI think there are dozens of traffic lights everywhere.", img: "🌈", correct: "Environmental Sensitivity" },
+            { case: "Scenario 18: Merged People", desc: "Two people are hugging, and the AI thinks it is just one person with four arms.", img: "🫂", correct: "Lack of Human Context" },
+            { case: "Scenario 19: 24/7 Monitoring", desc: "AI monitors a high-security server room all weekend without needing a break.", img: "🗄️", correct: "Increase Automation & Efficiency" },
+            { case: "Scenario 20: Missing Features", desc: "AI creates a very realistic face but forgets to draw the eyebrows or the nose.", img: "😶", correct: "Lack of Human Context" }
+        ];
+
+        function updateUI() {
+            const menu = document.getElementById('module-menu');
+            menu.innerHTML = state.modules.map((m, idx) => `
+                <div class="module-card p-3 rounded-2xl flex items-center gap-3 ${state.currentModuleIdx === idx ? 'active' : ''} ${m.locked ? 'locked' : 'cursor-pointer hover:bg-slate-800'}" 
+                     onclick="${!m.locked ? `startModule(${idx})` : ''}">
+                    <span class="text-xl">${m.icon}</span>
+                    <div class="whitespace-nowrap">
+                        <div class="text-[11px] font-black text-white uppercase italic">${m.name}</div>
+                        <div class="text-[9px] text-slate-500 uppercase font-bold">
+                            ${m.completed ? 'SOLVED' : (m.locked ? 'LOCKED' : 'ACTIVE')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function startModule(idx) {
+            state.currentModuleIdx = idx;
+            showIntro();
+            updateUI();
+        }
+
+        function showIntro() {
+            const mod = state.modules[state.currentModuleIdx];
+            document.getElementById('intro-title').innerText = mod.name;
+            document.getElementById('intro-icon').innerText = mod.icon;
+            document.getElementById('intro-concept-text').innerText = mod.concept;
+            document.getElementById('intro-instruction-text').innerText = mod.instruction;
+            document.getElementById('intro-modal').classList.remove('hidden');
+        }
+
+        function dismissIntro() {
+            document.getElementById('intro-modal').classList.add('hidden');
+            renderLevel();
+        }
+
+        function renderLevel() {
+            const module = state.modules[state.currentModuleIdx];
+            const container = document.getElementById('screen-content');
+            container.innerHTML = ""; 
+            if (module.id === 0) renderRGB(container, module);
+            else if (module.id === 1) renderClassification(container, module);
+            else if (module.id === 2) renderDetection(container, module);
+            else if (module.id === 3) renderLimitations(container, module);
+        }
+
+        function renderRGB(container, module) {
+            if (module.attemptsThisRound >= module.maxRoundAttempts) {
+                if (module.marks < module.target) return showRetryScreen(container);
+                else { handleModuleSuccess(); return; }
+            }
+            state.rgbTries = 0;
+            const q = module.attemptsThisRound + 1;
+            let size, noise, diffLabel;
+            if (q <= 18) { size = 6; noise = 100; diffLabel = "Training"; }
+            else if (q <= 50) { size = 11; noise = 40; diffLabel = "Advanced"; }
+            else { size = 18; noise = 18; diffLabel = "Elite"; }
+            
+            const target = [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)];
+            container.innerHTML = `
+                <div class="w-full flex flex-col items-center">
+                    <div class="flex justify-between w-full mb-6 items-center">
+                        <div class="flex items-center gap-4 bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                            <div class="w-12 h-12 rounded-lg border-2 border-white shadow-md" style="background: rgb(${target[0]},${target[1]},${target[2]})"></div>
+                            <div>
+                                <div class="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Target Signal</div>
+                                <div class="mono text-emerald-400 font-bold">R:${target[0]} G:${target[1]} B:${target[2]}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                             <div class="text-[10px] uppercase font-bold text-slate-500 mb-1 italic">${diffLabel} Sweep: ${q}/100</div>
+                             <div class="text-2xl font-black text-white">${module.marks}/20 Marks</div>
+                             <div id="try-dots" class="flex gap-1 justify-end mt-1"></div>
+                        </div>
+                    </div>
+                    <div id="pixel-grid" class="grid gap-1 bg-slate-950 p-2 rounded-xl shadow-inner border border-slate-800"></div>
+                </div>
+            `;
+            const dots = document.getElementById('try-dots');
+            for(let i=0; i<5; i++) dots.innerHTML += `<div class="try-dot"></div>`;
+            const grid = document.getElementById('pixel-grid');
+            grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            const total = size * size;
+            const targetPos = Math.floor(Math.random() * total);
+            for (let i = 0; i < total; i++) {
+                const cell = document.createElement('div');
+                cell.className = `rounded pixel-cell ${size < 8 ? 'w-12 h-12' : (size < 12 ? 'w-7 h-7' : 'w-5 h-5')}`;
+                if (i === targetPos) { cell.style.backgroundColor = `rgb(${target[0]},${target[1]},${target[2]})`; cell.dataset.correct = "true"; }
+                else {
+                    const r = Math.max(0, Math.min(255, target[0] + (Math.random() * noise * 2 - noise)));
+                    const g = Math.max(0, Math.min(255, target[1] + (Math.random() * noise * 2 - noise)));
+                    const b = Math.max(0, Math.min(255, target[2] + (Math.random() * noise * 2 - noise)));
+                    cell.style.backgroundColor = `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+                }
+                cell.onclick = () => handlePixelClick(cell);
+                grid.appendChild(cell);
+            }
+        }
+
+        function handlePixelClick(el) {
+            const mod = state.modules[0];
+            if (el.dataset.correct === "true") {
+                mod.marks++; mod.attemptsThisRound++;
+                if (mod.marks >= 20) handleModuleSuccess(); else renderLevel();
+            } else {
+                state.rgbTries++;
+                const dots = document.querySelectorAll('.try-dot');
+                if (dots[state.rgbTries-1]) dots[state.rgbTries-1].classList.add('used');
+                el.style.opacity = "0.1"; el.style.pointerEvents = "none";
+                if (state.rgbTries >= 5) { mod.attemptsThisRound++; renderLevel(); }
+            }
+        }
+
+        function renderClassification(container, module) {
+            if (module.currentLevel >= module.totalLevels) {
+                if (module.marks >= 20) { handleModuleSuccess(); return; }
+                else showAlert("FAIL", "Marks too low (Required: 20).", "⚠️", "RETRY", () => { module.currentLevel = 0; module.marks = 0; renderLevel(); });
+                return;
+            }
+
+            const item = emotionsData[module.currentLevel % emotionsData.length];
+            let blurAmount = 0;
+            if (module.currentLevel >= 20) blurAmount = 15;
+            else if (module.currentLevel >= 10) blurAmount = 6;
+            
+            container.innerHTML = `
+                <div class="w-full max-w-4xl flex flex-col items-center">
+                    <div class="text-center w-full max-w-lg mb-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <div class="text-emerald-500 font-bold uppercase text-[10px] tracking-widest">Feed Quality: ${blurAmount > 0 ? (blurAmount > 10 ? 'POOR' : 'UNCERTAIN') : 'CLEAR'}</div>
+                            <div class="text-white font-bold">Progress: ${module.currentLevel + 1}/50 | Marks: ${module.marks}/20</div>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-4 italic uppercase tracking-tight">Classify Emotion:</h2>
+                        <div class="bg-slate-950 p-12 rounded-[2rem] border-2 border-slate-800 mb-6 flex items-center justify-center noise-overlay overflow-hidden relative shadow-inner">
+                            <div class="text-[100px] transition-all duration-500" style="filter: blur(${blurAmount}px)">
+                                ${item.img}
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            ${item.options.map((opt, i) => {
+                                const isCorrect = (i === item.correct);
+                                return `<button onclick="handleClassifyClick(${isCorrect})" class="bg-slate-800 border-2 border-slate-700 p-5 rounded-2xl font-bold hover:border-emerald-500 hover:scale-105 transition-all text-lg shadow-lg">${opt}</button>`;
+                            }).join('')}
+                        </div>
+                    </div>
+
+                    <div class="w-full bg-slate-950/50 rounded-3xl border border-slate-800 p-6 shadow-inner">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-emerald-400 font-black italic uppercase text-sm tracking-widest">Emoticon Database Library</h3>
+                        </div>
+                        <div class="h-64 library-scroll grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 p-2">
+                            ${chartData.map(c => `
+                                <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col items-center text-center shadow-sm">
+                                    <span class="text-2xl mb-1">${c.img}</span>
+                                    <span class="text-[8px] font-bold text-slate-400 leading-tight uppercase tracking-tighter">${c.name}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleClassifyClick(correct) {
+            const mod = state.modules[1];
+            if (correct) mod.marks++;
+            mod.currentLevel++;
+            if (mod.marks >= 20) handleModuleSuccess(); else renderLevel();
+        }
+
+        function renderDetection(container, module) {
+            if (module.currentLevel >= module.totalLevels) {
+                if (module.marks >= 20) { handleModuleSuccess(); return; }
+                else showAlert("FAIL", "Required 20 Correct Labels.", "⚠️", "RETRY", () => { module.currentLevel = 0; module.marks = 0; renderLevel(); });
+                return;
+            }
+
+            const targetsPerRound = module.currentLevel < 10 ? 3 : (module.currentLevel < 20 ? 5 : 6);
+            state.detectionSubCount = 0;
+            
+            container.innerHTML = `
+                <div class="text-center w-full">
+                    <div class="flex justify-between items-center mb-4">
+                         <div class="text-white font-bold">Round: ${module.currentLevel + 1}/50</div>
+                         <div class="text-emerald-400 font-bold">Score: ${module.marks}/20</div>
+                    </div>
+                    <h2 class="text-2xl font-bold mb-2 italic uppercase tracking-tighter">Find ${targetsPerRound} Objects</h2>
+                    <div class="mb-4 bg-slate-800/50 p-4 rounded-xl inline-block border border-slate-700">
+                        <span class="text-slate-400 text-[10px] uppercase font-bold mr-2">Word List:</span>
+                        <div class="flex gap-2 flex-wrap justify-center mt-1">
+                            ${detectionObjects.map(w => `<span class="bg-slate-900 px-3 py-1 rounded-md text-emerald-400 font-bold border border-slate-700 text-xs">${w.name}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div id="detection-arena" class="bg-slate-950 border-2 border-slate-800 rounded-[3rem] h-[380px] relative overflow-hidden shadow-inner">
+                         <div class="absolute top-4 right-6 text-[10px] text-slate-600 font-bold uppercase tracking-widest">Targets Remaining: <span id="sub-target-count">${targetsPerRound}</span></div>
+                    </div>
+                </div>
+            `;
+            const arena = document.getElementById('detection-arena');
+
+            for(let i=0; i<targetsPerRound; i++) {
+                const target = detectionObjects[Math.floor(Math.random() * detectionObjects.length)];
+                const el = document.createElement('div');
+                el.className = "absolute p-4 cursor-pointer border-2 border-dashed border-transparent hover:border-emerald-500 rounded-2xl transition-all";
+                el.style.left = Math.random() * 85 + 5 + "%";
+                el.style.top = Math.random() * 70 + 15 + "%";
+                el.innerHTML = `<span class="text-4xl shadow-emerald-500/20">${target.icon}</span>`;
+                
+                el.onclick = () => {
+                    state.detectionAttempts = 3;
+                    openLabelModal(target.name, (isCorrect) => {
+                        if (isCorrect) {
+                            el.className = "absolute p-4 border-2 border-emerald-500 bg-emerald-500/20 rounded-2xl pointer-events-none";
+                            el.innerHTML += `<div class="absolute -top-6 left-0 text-[10px] bg-emerald-500 text-slate-950 px-2 font-bold uppercase tracking-tighter">${target.name} [0.99]</div>`;
+                            state.detectionSubCount++;
+                            document.getElementById('sub-target-count').innerText = targetsPerRound - state.detectionSubCount;
+                            if (state.detectionSubCount >= targetsPerRound) {
+                                module.marks++; module.currentLevel++;
+                                if (module.marks >= 20) handleModuleSuccess(); else setTimeout(renderLevel, 800);
+                            }
+                        } else {
+                            state.detectionAttempts--;
+                            if (state.detectionAttempts <= 0) {
+                                 document.getElementById('label-modal').classList.add('hidden');
+                                 el.className = "absolute p-4 opacity-20 pointer-events-none";
+                                 state.detectionSubCount++;
+                                 document.getElementById('sub-target-count').innerText = targetsPerRound - state.detectionSubCount;
+                                 if (state.detectionSubCount >= targetsPerRound) {
+                                    module.currentLevel++; setTimeout(renderLevel, 800);
+                                 }
+                            } else { updateLabelModalUI(); }
+                        }
+                    });
+                };
+                arena.appendChild(el);
+            }
+        }
+
+        function openLabelModal(targetName, callback) {
+            const modal = document.getElementById('label-modal');
+            const input = document.getElementById('label-input');
+            const btn = document.getElementById('label-submit-btn');
+            modal.classList.remove('hidden'); input.value = ""; input.focus();
+            updateLabelModalUI();
+            btn.onclick = () => {
+                const val = input.value.trim();
+                const isCorrect = val.toLowerCase() === targetName.toLowerCase();
+                if (isCorrect) modal.classList.add('hidden');
+                callback(isCorrect);
+            };
+            input.onkeypress = (e) => { if (e.key === 'Enter') btn.onclick(); };
+        }
+
+        function updateLabelModalUI() {
+            document.getElementById('label-tries-display').innerText = `Attempts Remaining: ${state.detectionAttempts}`;
+        }
+
+        function renderLimitations(container, module) {
+            if (module.currentLevel >= module.totalLevels) {
+                if (module.marks >= 10) { handleModuleSuccess(); return; }
+                else showAlert("FAIL", "You didn't solve enough cases. (10 required)", "⚠️", "RE-ANALYZE", () => { module.currentLevel = 0; module.marks = 0; renderLevel(); });
+                return;
+            }
+
+            const lv = curriculumCases[module.currentLevel];
+            let displayOptions = [];
+            if (module.currentLevel < 10) {
+                displayOptions = [lv.correct];
+                while(displayOptions.length < 3) {
+                    let rand = allPotentialLimits[Math.floor(Math.random() * allPotentialLimits.length)];
+                    if(!displayOptions.includes(rand)) displayOptions.push(rand);
+                }
+                displayOptions.sort(() => Math.random() - 0.5);
+            } else {
+                displayOptions = allPotentialLimits;
+            }
+
+            container.innerHTML = `
+                <div class="text-center w-full max-w-3xl">
+                    <div class="flex justify-between items-center mb-4">
+                         <div class="text-emerald-500 font-bold uppercase text-[10px] tracking-widest">Forensic Case ${module.currentLevel + 1}/20</div>
+                         <div class="text-white font-bold">Solved: ${module.marks}/10</div>
+                    </div>
+                    <h2 class="text-2xl font-black mb-2 text-white italic">${lv.case}</h2>
+                    <div class="text-left bg-slate-800/50 p-6 rounded-xl border border-slate-700 mb-6 shadow-inner">
+                        <h4 class="text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Scenario Description:</h4>
+                        <p class="text-slate-200 text-sm mb-4 leading-relaxed">${lv.desc}</p>
+                        <div class="h-px bg-slate-700 w-full mb-4"></div>
+                        <h4 class="text-emerald-400 font-black text-sm italic uppercase tracking-tight">Question: Which curriculum category applies to this scenario?</h4>
+                    </div>
+                    <div class="bg-slate-950 p-12 rounded-[3rem] border border-slate-800 mb-8 flex items-center justify-center shadow-inner">
+                        <div class="text-[120px] drop-shadow-2xl">${lv.img}</div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        ${displayOptions.map((opt) => `<button onclick="handleLimit('${opt}')" class="bg-slate-800 border-2 border-slate-700 p-4 rounded-xl font-bold hover:border-emerald-500 hover:scale-105 transition-all uppercase tracking-widest text-[10px] italic shadow-md">${opt}</button>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleLimit(chosen) {
+            const mod = state.modules[3];
+            const lv = curriculumCases[mod.currentLevel];
+            
+            if (chosen === lv.correct) {
+                mod.marks++;
+            }
+            
+            mod.currentLevel++;
+            
+            if (mod.marks >= 10) {
+                handleModuleSuccess();
+            } else if (mod.currentLevel >= mod.totalLevels) {
+                showAlert("FAIL", `Only ${mod.marks}/20 solved. You need 10 correct answers to pass.`, "⚠️", "RESTART", () => { mod.currentLevel = 0; mod.marks = 0; renderLevel(); });
+            } else {
+                renderLevel();
+            }
+        }
+
+        function handleModuleSuccess() {
+            const mod = state.modules[state.currentModuleIdx];
+            mod.completed = true;
+            const next = state.modules[state.currentModuleIdx + 1];
+            if (next) {
+                next.locked = false;
+                showAlert("SUCCESS", `${mod.name} decoded. Forensic clearance upgraded.`, "🔓", "PROCEED", () => startModule(state.currentModuleIdx + 1));
+            } else {
+                showVictory();
+            }
+            updateUI();
+        }
+
+        function showAlert(title, text, icon, btnText, callback) {
+            const overlay = document.getElementById('msg-overlay');
+            document.getElementById('msg-title').innerText = title;
+            document.getElementById('msg-text').innerText = text;
+            document.getElementById('msg-icon').innerText = icon;
+            document.getElementById('msg-btn').innerText = btnText;
+            overlay.classList.remove('hidden');
+            document.getElementById('msg-btn').onclick = () => { overlay.classList.add('hidden'); if (callback) callback(); };
+        }
+
+        function showVictory() {
+            document.getElementById('screen-content').innerHTML = `
+                <div class="text-center space-y-8 mt-10 animate-pulse">
+                    <div class="text-9xl">🕵️‍♂️🏆</div>
+                    <h2 class="text-6xl font-black text-emerald-400 italic">SYSTEM SECURED</h2>
+                    <p class="text-slate-300 text-xl max-w-lg mx-auto leading-relaxed">Master Detective, you have completed all training modules. The network is safe and the curriculum is mastered. Case Closed!</p>
+                    <button onclick="location.reload()" class="bg-emerald-500 text-slate-950 font-black px-16 py-6 rounded-[2rem] hover:scale-110 active-pulse uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/20">NEW CASE</button>
+                </div>`;
+        }
+
+        function showRetryScreen(container) {
+            container.innerHTML = `<div class="text-center"><div class="text-8xl mb-4">⚠️</div><h2 class="text-4xl font-black text-rose-500 mb-8 uppercase">Signal Failure</h2><button onclick="state.modules[0].marks=0;state.modules[0].attemptsThisRound=0;renderLevel()" class="bg-white text-slate-950 px-10 py-4 rounded-xl font-black active-pulse shadow-lg">REBOOT SCANNER</button></div>`;
+        }
+
+        function showAdminPrompt() { document.getElementById('admin-overlay').classList.remove('hidden'); document.getElementById('admin-pass').focus(); }
+        function closeAdmin() { document.getElementById('admin-overlay').classList.add('hidden'); document.getElementById('admin-pass').value = ''; }
+        
+        function checkAdmin() {
+            const p = document.getElementById('admin-pass').value;
+            if (p === "LaaamLaaam~~") {
+                state.modules.forEach(m => {
+                    m.locked = false;
+                    if (m.id === 3) {
+                        m.marks = 0;
+                        m.completed = false;
+                        m.currentLevel = 0;
+                    } else {
+                        m.marks = m.target || 20;
+                        m.completed = true;
+                    }
+                });
+                showAlert("SUPER ADMIN", "ALL ZONES UNLOCKED. MODULE 4 MARKS AT 0.", "🔓", "DISMISS", () => { closeAdmin(); updateUI(); startModule(3); });
+            } else if (p === "Laaaaaam~") {
+                const nextLocked = state.modules.find(m => m.locked);
+                if (nextLocked) {
+                    nextLocked.locked = false;
+                    const prev = state.modules.find(m => m.id === nextLocked.id - 1);
+                    if (prev) { prev.marks = prev.target || 20; prev.completed = true; }
+                    showAlert("ADMIN", `Bypassing to ${nextLocked.name}`, "🔑", "OK", () => { closeAdmin(); updateUI(); startModule(nextLocked.id); });
+                } else {
+                    closeAdmin();
+                }
+            }
+        }
+
+        setInterval(() => {
+            const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+            const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const s = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('timer').innerText = `${m}:${s}`;
+        }, 1000);
+
+        window.onload = () => { startModule(0); };
+    </script>
+
+    <footer class="p-6 text-center text-slate-600 text-[10px] uppercase tracking-[0.3em] font-bold">
+        HK Form 1 Computer Studies // AI Forensic Lab V18.0 // FINAL STABLE BUILD
+    </footer>
+</body>
+</html>
