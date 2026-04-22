@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Detective: Professional Training (V22)</title>
+    <title>AI Detective: Professional Training (V26)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
@@ -51,7 +51,7 @@
 
         .choice-btn { transition: all 0.2s ease; }
         .choice-btn.correct-choice { border-color: #10b981 !important; background-color: rgba(16, 185, 129, 0.15) !important; color: #10b981 !important; }
-        .choice-btn.wrong-choice { border-color: #ef4444 !important; opacity: 0.5; }
+        .choice-btn.wrong-choice { border-color: #ef4444 !important; background-color: rgba(239, 68, 68, 0.1) !important; opacity: 0.7; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -63,8 +63,8 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 </div>
                 <div>
-                    <h1 class="text-xl font-black tracking-tighter text-white uppercase italic">AI Detective <span class="text-emerald-500">Pro V22</span></h1>
-                    <p class="text-[10px] text-slate-500 font-bold tracking-[0.2em]">HK_CS_CURRICULUM_FINAL_BUILD</p>
+                    <h1 class="text-xl font-black tracking-tighter text-white uppercase italic">AI Detective <span class="text-emerald-500">Pro V26</span></h1>
+                    <p class="text-[10px] text-slate-500 font-bold tracking-[0.2em]">HK_CS_PERSISTENT_MEMORY_V26</p>
                 </div>
             </div>
             <div id="timer" class="mono text-emerald-400 bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 shadow-inner">00:00</div>
@@ -142,8 +142,8 @@
             modules: [
                 { 
                     id: 0, name: "RGB Forensics", icon: "🎨", marks: 0, target: 20, completed: false, locked: false, attemptsThisRound: 0, maxRoundAttempts: 100,
-                    concept: "Computers represent color as numeric data (RGB). Higher pixel density makes forensic extraction more difficult.",
-                    instruction: "Identify the signal signature that matches the target RGB coordinates."
+                    concept: "Computers represent color as numeric data (RGB). Hover over pixels to view their numeric signature.",
+                    instruction: "Identify the signal signature matching the target RGB coordinates. Hover to inspect."
                 },
                 { 
                     id: 1, name: "Classification", icon: "🎯", marks: 0, target: 20, completed: false, locked: true, currentLevel: 0, totalLevels: 50,
@@ -168,7 +168,10 @@
             detectionSubCount: 0,
             detectionRoundFailed: false,
             isTransitioning: false,
-            limitationsAnswered: false
+            limitationsAnswered: false,
+            classificationAnswered: false,
+            probeActive: true,
+            currentRGBData: null 
         };
 
         const allPotentialLimits = [
@@ -301,7 +304,7 @@
                 if (module.marks < module.target) return showRetryScreen(container);
                 else { handleModuleSuccess(); return; }
             }
-            state.rgbTries = 0;
+
             state.isTransitioning = false;
             const q = module.attemptsThisRound + 1;
             let size, noise, diffLabel;
@@ -309,16 +312,52 @@
             if (q <= 50) { size = 6; noise = 90; diffLabel = "Standard Sweep"; } 
             else { size = 10; noise = 40; diffLabel = "Advanced Sweep"; }
             
-            const target = [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)];
+            // Generate new data if this is a new question
+            if (!state.currentRGBData || state.currentRGBData.questionNum !== q) {
+                const target = [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)];
+                const total = size * size;
+                const targetPos = Math.floor(Math.random() * total);
+                const gridColors = [];
+                for (let i = 0; i < total; i++) {
+                    if (i === targetPos) {
+                        gridColors.push({ r: target[0], g: target[1], b: target[2], correct: true });
+                    } else {
+                        gridColors.push({
+                            r: Math.max(0, Math.min(255, Math.round(target[0] + (Math.random() * noise * 2 - noise)))),
+                            g: Math.max(0, Math.min(255, Math.round(target[1] + (Math.random() * noise * 2 - noise)))),
+                            b: Math.max(0, Math.min(255, Math.round(target[2] + (Math.random() * noise * 2 - noise)))),
+                            correct: false
+                        });
+                    }
+                }
+                state.currentRGBData = { 
+                    questionNum: q, 
+                    target, 
+                    targetPos, 
+                    gridColors, 
+                    size,
+                    failedIndices: [] // Persistent list of clicked wrong pixels
+                };
+                state.rgbTries = 0; // Reset tries only for a new question
+            }
+
+            const { target, gridColors, failedIndices } = state.currentRGBData;
+
             container.innerHTML = `
                 <div class="w-full flex flex-col items-center">
-                    <div class="flex justify-between w-full mb-6 items-center">
+                    <div class="flex flex-col md:flex-row justify-between w-full mb-6 items-center gap-4">
                         <div class="flex items-center gap-4 bg-slate-800 p-4 rounded-2xl border border-slate-700">
                             <div class="w-12 h-12 rounded-lg border-2 border-white shadow-md" style="background: rgb(${target[0]},${target[1]},${target[2]})"></div>
                             <div>
                                 <div class="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Target Signal</div>
                                 <div class="mono text-emerald-400 font-bold">R:${target[0]} G:${target[1]} B:${target[2]}</div>
                             </div>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                             <div id="hover-probe" class="bg-slate-950 px-4 py-2 rounded-xl border border-emerald-500/30 mono text-xs text-emerald-500/50">PROBE: ${state.probeActive ? 'IDLE' : 'DISABLED'}</div>
+                             <button onclick="toggleProbe()" class="text-[9px] font-black uppercase tracking-tighter px-4 py-1 rounded-full border border-slate-700 bg-slate-800 hover:bg-slate-700 transition-colors">
+                                 ${state.probeActive ? 'Disable Probe' : 'Enable Probe'}
+                             </button>
                         </div>
                         <div class="text-right">
                              <div class="text-[10px] uppercase font-bold text-slate-500 mb-1 italic">${diffLabel}: ${q}/100</div>
@@ -329,48 +368,79 @@
                     <div id="pixel-grid" class="grid gap-1 bg-slate-950 p-2 rounded-xl shadow-inner border border-slate-800"></div>
                 </div>
             `;
-            const dots = document.getElementById('try-dots');
-            for(let i=0; i<5; i++) dots.innerHTML += `<div class="try-dot"></div>`;
+
+            const probe = document.getElementById('hover-probe');
+            const dotsCont = document.getElementById('try-dots');
+            for(let i=0; i<5; i++) {
+                const dot = document.createElement('div');
+                dot.className = `try-dot ${i < state.rgbTries ? 'used' : ''}`;
+                dotsCont.appendChild(dot);
+            }
+            
             const grid = document.getElementById('pixel-grid');
             grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
-            const total = size * size;
-            const targetPos = Math.floor(Math.random() * total);
-            for (let i = 0; i < total; i++) {
+
+            gridColors.forEach((color, i) => {
                 const cell = document.createElement('div');
                 cell.className = `rounded pixel-cell ${size < 8 ? 'w-12 h-12' : 'w-7 h-7'}`;
-                if (i === targetPos) { cell.style.backgroundColor = `rgb(${target[0]},${target[1]},${target[2]})`; cell.dataset.correct = "true"; }
-                else {
-                    const r = Math.max(0, Math.min(255, target[0] + (Math.random() * noise * 2 - noise)));
-                    const g = Math.max(0, Math.min(255, target[1] + (Math.random() * noise * 2 - noise)));
-                    const b = Math.max(0, Math.min(255, target[2] + (Math.random() * noise * 2 - noise)));
-                    cell.style.backgroundColor = `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+                if (color.correct) cell.dataset.correct = "true";
+                
+                // Restore state: if already clicked and wrong, disable it
+                if (failedIndices.includes(i)) {
+                    cell.style.opacity = "0.1";
+                    cell.style.pointerEvents = "none";
                 }
-                cell.onclick = () => handlePixelClick(cell);
+
+                cell.style.backgroundColor = `rgb(${color.r},${color.g},${color.b})`;
+                
+                cell.onmouseover = () => { 
+                    if(state.probeActive) {
+                        probe.innerText = `PROBE: R:${color.r} G:${color.g} B:${color.b}`; 
+                        probe.classList.add('text-emerald-400'); 
+                    }
+                };
+                cell.onmouseleave = () => { 
+                    if(state.probeActive) {
+                        probe.innerText = `PROBE: IDLE`; 
+                        probe.classList.remove('text-emerald-400'); 
+                    }
+                };
+                cell.onclick = () => handlePixelClick(cell, i);
                 grid.appendChild(cell);
-            }
+            });
         }
 
-        function handlePixelClick(el) {
+        function toggleProbe() {
+            state.probeActive = !state.probeActive;
+            renderLevel();
+        }
+
+        function handlePixelClick(el, index) {
             if (state.isTransitioning) return;
             const mod = state.modules[0];
             const correctPixel = document.querySelector('[data-correct="true"]');
             
             if (el.dataset.correct === "true") {
                 state.isTransitioning = true;
-                mod.marks++; mod.attemptsThisRound++;
+                mod.marks++; 
+                mod.attemptsThisRound++;
                 el.classList.add('correct-reveal');
                 setTimeout(() => {
                     if (mod.marks >= 20) handleModuleSuccess(); else renderLevel();
                 }, 1000);
             } else {
                 state.rgbTries++;
+                state.currentRGBData.failedIndices.push(index); // Save the failed click
+                
                 const dots = document.querySelectorAll('.try-dot');
                 if (dots[state.rgbTries-1]) dots[state.rgbTries-1].classList.add('used');
-                el.style.opacity = "0.1"; el.style.pointerEvents = "none";
+                
+                el.style.opacity = "0.1"; 
+                el.style.pointerEvents = "none";
                 
                 if (state.rgbTries >= 5) { 
                     state.isTransitioning = true;
-                    correctPixel.classList.add('correct-reveal');
+                    if (correctPixel) correctPixel.classList.add('correct-reveal');
                     mod.attemptsThisRound++;
                     setTimeout(() => renderLevel(), 1500);
                 }
@@ -384,6 +454,7 @@
                 return;
             }
 
+            state.classificationAnswered = false;
             const item = emotionsData[module.currentLevel % emotionsData.length];
             let blurAmount = 0;
             if (module.currentLevel >= 20) blurAmount = 15;
@@ -394,18 +465,21 @@
                     <div class="text-center w-full max-w-lg mb-6">
                         <div class="flex justify-between items-center mb-6">
                             <div class="text-emerald-500 font-bold uppercase text-[10px] tracking-widest">Feed Quality: ${blurAmount > 0 ? (blurAmount > 10 ? 'POOR' : 'UNCERTAIN') : 'CLEAR'}</div>
-                            <div class="text-white font-bold">Progress: ${module.currentLevel + 1}/50 | Marks: ${module.marks}/20</div>
+                            <div id="class-marks" class="text-white font-bold tracking-tight">Progress: ${module.currentLevel + 1}/50 | Marks: ${module.marks}/20</div>
                         </div>
                         <h2 class="text-2xl font-bold mb-4 italic uppercase tracking-tight">Interrogate Suspect:</h2>
-                        <div class="bg-slate-950 p-12 rounded-[2rem] border-2 border-slate-800 mb-6 flex items-center justify-center noise-overlay overflow-hidden relative shadow-inner">
-                            <div class="text-[100px] transition-all duration-500" style="filter: blur(${blurAmount}px)">
+                        <div class="bg-slate-950 p-12 rounded-[2rem] border-2 border-slate-800 mb-6 flex flex-col items-center justify-center noise-overlay overflow-hidden relative shadow-inner">
+                            <div id="interrogation-img" class="text-[100px] transition-all duration-500" style="filter: blur(${blurAmount}px)">
                                 ${item.img}
                             </div>
+                            <div id="class-explanation" class="hidden mt-4 text-center">
+                                <h4 id="class-status" class="text-xl font-black uppercase italic"></h4>
+                                <button onclick="proceedToNextClass()" class="mt-4 bg-emerald-500 text-slate-950 px-8 py-2 rounded-xl font-black uppercase tracking-widest active-pulse">Next Case</button>
+                            </div>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-2 gap-4" id="class-choices">
                             ${item.options.map((opt, i) => {
-                                const isCorrect = (i === item.correct);
-                                return `<button onclick="handleClassifyClick(${isCorrect}, '${item.options[item.correct]}')" class="bg-slate-800 border-2 border-slate-700 p-5 rounded-2xl font-bold hover:border-emerald-500 hover:scale-105 transition-all text-lg shadow-lg">${opt}</button>`;
+                                return `<button onclick="handleClassifyClick(this, ${i === item.correct}, '${item.options[item.correct]}')" class="class-btn bg-slate-800 border-2 border-slate-700 p-5 rounded-2xl font-bold hover:border-emerald-500 hover:scale-105 transition-all text-lg shadow-lg">${opt}</button>`;
                             }).join('')}
                         </div>
                     </div>
@@ -427,17 +501,40 @@
             `;
         }
 
-        function handleClassifyClick(correct, correctName) {
+        function handleClassifyClick(btn, isCorrect, correctName) {
+            if (state.classificationAnswered) return;
+            state.classificationAnswered = true;
+
             const mod = state.modules[1];
-            const feedbackText = correct ? "Analysis confirmed." : `Error: Suspect expression was ${correctName}.`;
-            const feedbackIcon = correct ? "✅" : "❌";
+            if (isCorrect) mod.marks++;
             
-            if (correct) mod.marks++;
-            mod.currentLevel++;
-            
-            showAlert(correct ? "ACCURATE" : "ERROR", feedbackText, feedbackIcon, "PROCEED", () => {
-                if (mod.marks >= 20) handleModuleSuccess(); else renderLevel();
+            const allBtns = document.querySelectorAll('.class-btn');
+            allBtns.forEach(b => {
+                if (b.innerText.trim() === correctName.toUpperCase()) b.classList.add('correct-choice');
+                else b.classList.add('wrong-choice');
             });
+
+            document.getElementById('interrogation-img').style.filter = "none";
+            const expContainer = document.getElementById('class-explanation');
+            const expStatus = document.getElementById('class-status');
+            
+            expContainer.classList.remove('hidden');
+            expStatus.innerText = isCorrect ? "CORRECT ANALYSIS" : `ERROR: WAS ${correctName}`;
+            expStatus.className = isCorrect ? "text-emerald-400 text-xl font-black uppercase italic" : "text-rose-500 text-xl font-black uppercase italic";
+            
+            document.getElementById('class-marks').innerText = `Progress: ${mod.currentLevel + 1}/50 | Marks: ${mod.marks}/20`;
+        }
+
+        function proceedToNextClass() {
+            const mod = state.modules[1];
+            mod.currentLevel++;
+            if (mod.marks >= 20) {
+                handleModuleSuccess();
+            } else if (mod.currentLevel >= mod.totalLevels) {
+                showAlert("SCAN COMPLETE", `Only ${mod.marks}/50 correct. Target is 20.`, "⚠️", "REBOOT", () => { mod.currentLevel = 0; mod.marks = 0; renderLevel(); });
+            } else {
+                renderLevel();
+            }
         }
 
         function renderDetection(container, module) {
@@ -603,7 +700,6 @@
             
             if (isCorrect) mod.marks++;
             
-            // UI Feedback
             const allBtns = document.querySelectorAll('.choice-btn');
             allBtns.forEach(b => {
                 if (b.innerText.trim() === lv.correct.toUpperCase()) b.classList.add('correct-choice');
@@ -626,7 +722,7 @@
             if (mod.marks >= 10) {
                 handleModuleSuccess();
             } else if (mod.currentLevel >= mod.totalLevels) {
-                showAlert("FAIL", `Only ${mod.marks}/20 solved. You need 10 marks to pass.`, "⚠️", "RESTART", () => { mod.currentLevel = 0; mod.marks = 0; renderLevel(); });
+                showAlert("FAIL", `Only ${mod.marks}/20 solved. You need 10 marks to pass.`, "⚠️", "RESTART", () => { mod.currentLevel = 0; module.marks = 0; renderLevel(); });
             } else {
                 renderLevel();
             }
@@ -667,7 +763,7 @@
         }
 
         function showRetryScreen(container) {
-            container.innerHTML = `<div class="text-center"><div class="text-8xl mb-4">⚠️</div><h2 class="text-4xl font-black text-rose-500 mb-8 uppercase italic">Signal Failure</h2><button onclick="state.modules[0].marks=0;state.modules[0].attemptsThisRound=0;renderLevel()" class="bg-white text-slate-950 px-10 py-4 rounded-xl font-black active-pulse shadow-lg text-lg">REBOOT SCANNER</button></div>`;
+            container.innerHTML = `<div class="text-center"><div class="text-8xl mb-4">⚠️</div><h2 class="text-4xl font-black text-rose-500 mb-8 uppercase italic">Signal Failure</h2><button onclick="state.modules[0].marks=0;state.modules[0].attemptsThisRound=0;state.currentRGBData=null;renderLevel()" class="bg-white text-slate-950 px-10 py-4 rounded-xl font-black active-pulse shadow-lg text-lg">REBOOT SCANNER</button></div>`;
         }
 
         function showAdminPrompt() { document.getElementById('admin-overlay').classList.remove('hidden'); document.getElementById('admin-pass').focus(); }
@@ -704,7 +800,7 @@
     </script>
 
     <footer class="p-6 text-center text-slate-600 text-[10px] uppercase tracking-[0.3em] font-bold">
-        HK Form 1 Computer Studies // AI Forensic Lab V22.0 // FINAL RELEASE
+        HK Form 1 Computer Studies // AI Forensic Lab V26.0 // PERSISTENT STATE BUILD
     </footer>
 </body>
 </html>
