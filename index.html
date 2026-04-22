@@ -667,14 +667,14 @@
         
         function checkAdmin() {
             const p = document.getElementById('admin-pass').value;
-            if (p === atob(_K2)) { // LaamLaam
+            if (p === atob(_K2)) { 
                 state.modules.forEach(m => {
                     m.locked = false;
                     if (m.id === 3) { m.marks = 0; m.completed = false; m.currentLevel = 0; } 
                     else { m.marks = m.target; m.completed = true; }
                 });
                 showAlert("SUPER ADMIN", "ALL ZONES UNLOCKED. JUMPING TO FINALE.", "🔓", "DISMISS", () => { closeAdmin(); updateUI(); startModule(3); });
-            } else if (p === atob(_K1)) { // Laaaaaam
+            } else if (p === atob(_K1)) { 
                 const nextLocked = state.modules.find(m => m.locked);
                 if (nextLocked) {
                     nextLocked.locked = false;
