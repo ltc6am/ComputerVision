@@ -30,7 +30,6 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <!-- Decryption Key Overlay -->
     <div id="auth-overlay" class="fixed inset-0 z-[300] bg-slate-950/98 backdrop-blur-xl flex items-center justify-center p-6 hidden">
         <div class="bg-slate-900 border-2 border-emerald-500 p-8 rounded-[2.5rem] max-w-sm w-full text-center shadow-2xl">
             <div class="bg-emerald-500/10 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-emerald-500/30">
@@ -53,18 +52,15 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-black tracking-tighter text-white uppercase italic">AI Detective <span class="text-emerald-500">Pro</span></h1>
-                    <p class="text-[10px] text-slate-500 font-bold tracking-[0.2em]">V.1.35</p>
+                    <p class="text-[10px] text-slate-500 font-bold tracking-[0.2em]">V.1.50</p>
                 </div>
             </div>
             <div id="timer" class="mono text-emerald-400 bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 shadow-inner">00:00</div>
         </div>
     </header>
 
-    <!-- Responsive Navigation (flex-wrap + justify-center) -->
     <nav class="bg-slate-900/50 border-b border-slate-800 p-4">
-        <div id="module-menu" class="max-w-7xl mx-auto flex flex-wrap justify-center gap-4">
-            <!-- Cards rendered by JS -->
-        </div>
+        <div id="module-menu" class="max-w-7xl mx-auto flex flex-wrap justify-center gap-4"></div>
     </nav>
 
     <main class="flex-1 max-w-6xl mx-auto w-full p-4 md:p-8">
@@ -77,8 +73,7 @@
                 </div>
             </div>
 
-            <!-- Modals (Intro, Label, Msg, Admin) -->
-            <!-- ... [Kept from previous version] ... -->
+            <!-- Modals -->
             <div id="intro-modal" class="hidden absolute inset-0 z-[150] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6">
                 <div class="bg-slate-900 border-2 border-emerald-500/50 p-8 rounded-[2rem] max-w-xl w-full">
                     <div class="flex items-center gap-4 mb-4">
@@ -132,7 +127,6 @@
         const _K1 = "TGFhYWFhYW0="; 
         const _K2 = "TGFhbUxhYW0="; 
 
-        // BASE64 ENCRYPTED MODULE KEYS
         const MODULE_KEYS_B64 = {
             0: "MzkyMDE1", 
             1: "NzQ4MjA5", 
@@ -142,10 +136,10 @@
 
         const state = {
             modules: [
-                { id: 0, name: "RGB Forensics", icon: "🎨", marks: 0, target: 20, completed: false, locked: false, authorized: false, attemptsThisRound: 0, maxRoundAttempts: 100, concept: "Computers represent color as numeric data (RGB).", instruction: "Identify the signal signature matching the target RGB coordinates." },
-                { id: 1, name: "Classification", icon: "🎯", marks: 0, target: 15, completed: false, locked: true, authorized: false, currentLevel: 0, concept: "Image Classification groups data into categories.", instruction: "Analyze suspect emotions to find clues." },
+                { id: 0, name: "RGB Forensics", icon: "🎨", marks: 0, target: 15, completed: false, locked: false, authorized: false, attemptsThisRound: 0, maxRoundAttempts: 100, concept: "Computers represent color as numeric data (RGB).", instruction: "Identify the signal signature matching the target RGB coordinates." },
+                { id: 1, name: "Classification", icon: "🎯", marks: 0, target: 20, completed: false, locked: true, authorized: false, currentLevel: 0, concept: "Image Classification groups data into categories.", instruction: "Analyze suspect emotions to find clues." },
                 { id: 2, name: "Detection", icon: "🔎", marks: 0, target: 5, completed: false, locked: true, authorized: false, currentLevel: 0, concept: "Detection identifies 'Where' objects are.", instruction: "Label all signal sources in the room." },
-                { id: 3, name: "Potentials & Limits", icon: "⚖️", marks: 0, target: 10, completed: false, locked: true, authorized: false, currentLevel: 0, concept: "AI vision has benefits and limitations.", instruction: "Review evidence and identify the curriculum category." }
+                { id: 3, name: "Potentials & Limits", icon: "⚖️", marks: 0, target: 15, completed: false, locked: true, authorized: false, currentLevel: 0, concept: "AI vision has benefits and limitations.", instruction: "Review evidence and identify the curriculum category." }
             ],
             currentModuleIdx: -1,
             pendingModuleIdx: -1,
@@ -159,54 +153,6 @@
             currentRGBData: null 
         };
 
-        // UI & Authorization Logic
-        function updateUI() {
-            const menu = document.getElementById('module-menu');
-            menu.innerHTML = state.modules.map((m, idx) => `
-                <div class="module-card p-3 rounded-2xl flex items-center gap-3 ${state.currentModuleIdx === idx ? 'active' : ''} ${m.locked ? 'locked' : 'cursor-pointer hover:bg-slate-800'}" 
-                     onclick="${!m.locked ? `requestModuleAccess(${idx})` : ''}">
-                    <span class="text-xl">${m.icon}</span>
-                    <div class="whitespace-nowrap">
-                        <div class="text-[11px] font-black text-white uppercase italic">${m.name}</div>
-                        <div class="text-[9px] text-slate-500 uppercase font-bold">${m.completed ? 'SOLVED' : (m.authorized ? 'UNLOCKED' : (m.locked ? 'LOCKED' : 'ACTIVE'))}</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function requestModuleAccess(idx) {
-            const mod = state.modules[idx];
-            if (mod.authorized) {
-                startModule(idx);
-            } else {
-                state.pendingModuleIdx = idx;
-                state.isAuthModalOpen = true;
-                document.getElementById('auth-overlay').classList.remove('hidden');
-                document.getElementById('auth-title').innerText = `DECRYPT: ${mod.name}`;
-                document.getElementById('auth-key-input').value = "";
-                document.getElementById('auth-key-input').focus();
-            }
-        }
-
-        function verifyModuleKey() {
-            const input = document.getElementById('auth-key-input').value;
-            const correctDecryptedKey = atob(MODULE_KEYS_B64[state.pendingModuleIdx]);
-            const errorMsg = document.getElementById('auth-error');
-
-            if (input === correctDecryptedKey) {
-                state.isAuthModalOpen = false;
-                state.modules[state.pendingModuleIdx].authorized = true;
-                document.getElementById('auth-overlay').classList.add('hidden');
-                startModule(state.pendingModuleIdx);
-            } else {
-                errorMsg.classList.remove('hidden');
-                setTimeout(() => errorMsg.classList.add('hidden'), 2000);
-                document.getElementById('auth-key-input').value = "";
-            }
-        }
-
-        // Logic functions remain the same as the original game...
-        // ... [RGB, Classification, Detection, and Limitations Logic] ...
         const allPotentialLimits = ["Increase Automation & Efficiency", "Enhance Safety & Convenience", "Secure Personalization", "Data Dependency & Bias", "Environmental Sensitivity", "Lack of Human Context"];
 
         const chartData = [
@@ -245,6 +191,56 @@
             { icon: "💾", name: "Disk" }, { icon: "📹", name: "Camera" }, { icon: "🔌", name: "Cable" }, { icon: "🗄️", name: "Server" }, 
             { icon: "📦", name: "Box" }, { icon: "💻", name: "Laptop" }, { icon: "⌨️", name: "Keyboard" }, { icon: "🖱️", name: "Mouse" }, { icon: "📱", name: "Phone" }
         ];
+
+        function updateUI() {
+            const menu = document.getElementById('module-menu');
+            menu.innerHTML = state.modules.map((m, idx) => `
+                <div class="module-card p-3 rounded-2xl flex items-center gap-3 ${state.currentModuleIdx === idx ? 'active' : ''} ${m.locked ? 'locked' : 'cursor-pointer hover:bg-slate-800'}" 
+                     onclick="${!m.locked ? `requestModuleAccess(${idx})` : ''}">
+                    <span class="text-xl">${m.icon}</span>
+                    <div class="whitespace-nowrap">
+                        <div class="text-[11px] font-black text-white uppercase italic">${m.name}</div>
+                        <div class="text-[9px] text-slate-500 uppercase font-bold">${m.completed ? 'SOLVED' : (m.authorized ? 'UNLOCKED' : (m.locked ? 'LOCKED' : 'ACTIVE'))}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function requestModuleAccess(idx) {
+            const mod = state.modules[idx];
+            if (mod.authorized) {
+                if (mod.completed) {
+                    mod.marks = 0; mod.completed = false;
+                    if (mod.id === 0) { mod.attemptsThisRound = 0; state.currentRGBData = null; }
+                    else { mod.currentLevel = 0; }
+                }
+                startModule(idx);
+            } else {
+                state.pendingModuleIdx = idx;
+                state.isAuthModalOpen = true;
+                document.getElementById('auth-overlay').classList.remove('hidden');
+                document.getElementById('auth-title').innerText = `DECRYPT: ${mod.name}`;
+                document.getElementById('auth-key-input').value = "";
+                document.getElementById('auth-key-input').focus();
+            }
+        }
+
+        function verifyModuleKey() {
+            const input = document.getElementById('auth-key-input').value;
+            const correctDecryptedKey = atob(MODULE_KEYS_B64[state.pendingModuleIdx]);
+            const errorMsg = document.getElementById('auth-error');
+
+            if (input === correctDecryptedKey) {
+                state.isAuthModalOpen = false;
+                state.modules[state.pendingModuleIdx].authorized = true;
+                document.getElementById('auth-overlay').classList.add('hidden');
+                startModule(state.pendingModuleIdx);
+            } else {
+                errorMsg.classList.remove('hidden');
+                setTimeout(() => errorMsg.classList.add('hidden'), 2000);
+                document.getElementById('auth-key-input').value = "";
+            }
+        }
 
         function startModule(idx) {
             state.currentModuleIdx = idx;
@@ -322,7 +318,7 @@
                         </div>
                         <div class="text-right">
                              <div class="text-[10px] uppercase font-bold text-slate-500 mb-1 italic">Sweep: ${q}/100</div>
-                             <div class="text-2xl font-black text-white">${module.marks}/20 Marks</div>
+                             <div class="text-2xl font-black text-white">${module.marks}/${module.target} Marks</div>
                              <div id="try-dots" class="flex gap-1 justify-end mt-1"></div>
                              <button onclick="toggleProbe()" class="mt-2 text-[9px] font-black uppercase px-4 py-1 rounded-full border border-slate-700 bg-slate-800">${state.probeActive ? 'Disable Probe' : 'Enable Probe'}</button>
                         </div>
@@ -330,7 +326,6 @@
                     <div id="pixel-grid" class="grid gap-1 bg-slate-950 p-3 rounded-[2rem] border border-slate-800 shadow-inner"></div>
                 </div>
             `;
-
             const hudVal = document.getElementById('hud-value');
             const dotsCont = document.getElementById('try-dots');
             for(let i=0; i<5; i++) {
@@ -338,7 +333,6 @@
                 dot.className = `try-dot ${i < state.rgbTries ? 'used' : ''}`;
                 dotsCont.appendChild(dot);
             }
-
             const grid = document.getElementById('pixel-grid');
             grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
             gridColors.forEach((color, i) => {
@@ -347,7 +341,6 @@
                 if (color.correct) cell.dataset.correct = "true";
                 if (failedIndices.includes(i)) { cell.style.opacity = "0.1"; cell.style.pointerEvents = "none"; }
                 cell.style.backgroundColor = `rgb(${color.r},${color.g},${color.b})`;
-                
                 cell.onmouseover = () => { if(state.probeActive) { hudVal.innerText = `R:${color.r} G:${color.g} B:${color.b}`; } };
                 cell.onmouseleave = () => { if(state.probeActive) { hudVal.innerText = `Idle`; } };
                 cell.onclick = () => handlePixelClick(cell, i);
@@ -364,7 +357,7 @@
                 state.isTransitioning = true;
                 mod.marks++; mod.attemptsThisRound++;
                 el.classList.add('correct-reveal');
-                setTimeout(() => { if (mod.marks >= 20) handleModuleSuccess(); else renderLevel(); }, 1000);
+                setTimeout(() => { if (mod.marks >= mod.target) handleModuleSuccess(); else renderLevel(); }, 1000);
             } else {
                 state.rgbTries++;
                 state.currentRGBData.failedIndices.push(index);
@@ -391,7 +384,7 @@
             container.innerHTML = `
                 <div class="w-full max-w-5xl flex flex-col items-center">
                     <div class="text-center w-full max-w-lg mb-8">
-                        <div class="flex justify-between items-center mb-4"><span class="text-white font-bold">Level: ${module.currentLevel + 1}/50</span><span class="text-emerald-400 font-bold">Marks: ${module.marks}/15</span></div>
+                        <div class="flex justify-between items-center mb-4"><span class="text-white font-bold">Level: ${module.currentLevel + 1}</span><span class="text-emerald-400 font-bold">Marks: ${module.marks}/${module.target}</span></div>
                         <div class="bg-slate-950 p-12 rounded-[2rem] border-2 border-slate-800 mb-6 flex items-center justify-center noise-overlay overflow-hidden shadow-inner relative">
                             <div id="interrogation-img" class="text-[100px] transition-all duration-500" style="filter: blur(${blur}px)">${item.img}</div>
                             <div id="class-explanation" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 text-center">
@@ -431,21 +424,29 @@
 
         function proceedToNextClass() {
             state.modules[1].currentLevel++;
-            if (state.modules[1].marks >= 15) handleModuleSuccess(); else renderLevel();
+            if (state.modules[1].marks >= state.modules[1].target) handleModuleSuccess(); else renderLevel();
         }
 
         function renderDetection(container, module) {
-            const targets = module.currentLevel < 10 ? 3 : (module.currentLevel < 20 ? 5 : 6);
+            const targets = module.currentLevel < 5 ? 3 : 5;
             state.detectionSubCount = 0; state.detectionRoundFailed = false;
             container.innerHTML = `
                 <div class="text-center w-full">
-                    <div class="flex justify-between items-center mb-4"><span class="text-white font-bold">Round: ${module.currentLevel + 1}/50</span><span class="text-emerald-400 font-bold">Marks: ${module.marks}/5</span></div>
-                    <h2 class="text-3xl font-black mb-6 italic uppercase tracking-tighter">Locate ${targets} Signal Sources</h2>
-                    <div class="mb-8 flex gap-4 flex-wrap justify-center bg-slate-800/50 p-6 rounded-3xl border border-slate-700">
-                        <span class="text-slate-500 font-black uppercase text-xs italic w-full">Reference Word List:</span>
-                        ${detectionObjects.map(w => `<span class="bg-slate-950 px-5 py-2 rounded-xl text-emerald-400 font-black border-2 border-emerald-500/20 uppercase text-lg shadow-inner">${w.name}</span>`).join('')}
+                    <div class="flex justify-between items-center mb-4"><span class="text-white font-bold">Round: ${module.currentLevel + 1}</span><span class="text-emerald-400 font-bold">Marks: ${module.marks}/${module.target}</span></div>
+                    <div id="detection-arena" class="bg-slate-950 border-4 border-slate-800 rounded-[4rem] h-[450px] relative overflow-hidden shadow-inner mb-8"></div>
+                    
+                    <!-- SIGNAL SOURCE DATABASE REFERENCE -->
+                    <div class="w-full bg-slate-950/50 rounded-[2.5rem] border-2 border-slate-800 p-8 shadow-inner">
+                        <h3 class="text-emerald-400 font-black italic uppercase text-lg mb-6 tracking-widest text-left">Signal Source Database</h3>
+                        <div class="library-scroll grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-6 p-4">
+                            ${detectionObjects.map(obj => `
+                                <div class="bg-slate-900 border-2 border-slate-800 p-6 rounded-2xl flex flex-col items-center text-center shadow-lg">
+                                    <span class="text-5xl mb-3">${obj.icon}</span>
+                                    <span class="text-[11px] font-black text-slate-300 uppercase leading-tight tracking-widest">${obj.name}</span>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
-                    <div id="detection-arena" class="bg-slate-950 border-4 border-slate-800 rounded-[4rem] h-[450px] relative overflow-hidden shadow-inner"></div>
                 </div>
             `;
             const arena = document.getElementById('detection-arena');
@@ -464,9 +465,8 @@
                             el.innerHTML += `<div class="absolute -top-10 left-0 text-xs bg-emerald-500 text-slate-950 px-3 py-1 font-black uppercase tracking-tighter rounded-full shadow-lg">${target.name} [0.99]</div>`;
                             state.detectionSubCount++;
                             if (state.detectionSubCount >= targets) { 
-                                state.modules[2].marks++; 
-                                state.modules[2].currentLevel++; 
-                                showAlert("Area Secured", "All labels verified.", "🎯", "Continue", () => state.modules[2].marks >= 5 ? handleModuleSuccess() : renderLevel()); 
+                                state.modules[2].marks++; state.modules[2].currentLevel++; 
+                                if (state.modules[2].marks >= state.modules[2].target) handleModuleSuccess(); else renderLevel();
                             }
                         } else {
                             state.detectionAttempts--;
@@ -490,23 +490,17 @@
             container.innerHTML = `
                 <div class="text-center w-full max-w-4xl">
                     <div class="flex justify-between items-center mb-6">
-                         <div class="text-emerald-500 font-black uppercase text-sm tracking-[0.2em]">Forensic Case ${module.currentLevel + 1}/20</div>
-                         <div class="text-white font-black text-sm">Solved: ${module.marks}/10</div>
+                         <div class="text-emerald-500 font-black uppercase text-sm">Case ${module.currentLevel + 1}</div>
+                         <div class="text-white font-black text-sm">Solved: ${module.marks}/${module.target}</div>
                     </div>
-                    <h2 class="text-3xl font-black mb-6 text-white italic">${lv.case}</h2>
-                    <div class="text-left bg-slate-800/50 p-8 rounded-[2rem] border-2 border-slate-700 mb-8 shadow-inner">
-                        <div class="mb-6">
-                            <h4 class="text-xs font-black text-slate-500 uppercase mb-2 tracking-widest italic">Scenario Details:</h4>
-                            <p class="text-slate-100 text-2xl leading-relaxed font-semibold">${lv.desc}</p>
+                    <div id="scenario-block">
+                        <h2 class="text-3xl font-black mb-6 text-white italic">${lv.case}</h2>
+                        <div class="text-left bg-slate-800/50 p-8 rounded-[2rem] border-2 border-slate-700 mb-8 shadow-inner">
+                            <div class="mb-6"><p class="text-slate-100 text-2xl leading-relaxed font-semibold">${lv.desc}</p></div>
+                            <div class="mb-8 bg-slate-900/60 p-6 rounded-2xl border border-slate-700/50"><p class="text-emerald-50 text-2xl leading-relaxed font-bold">${lv.zh}</p></div>
                         </div>
-                        <div class="mb-8 bg-slate-900/60 p-6 rounded-2xl border border-slate-700/50">
-                            <h4 class="text-xs font-black text-emerald-500 uppercase mb-2 tracking-widest italic">情境說明 (繁體中文):</h4>
-                            <p class="text-emerald-50 text-2xl leading-relaxed font-bold">${lv.zh}</p>
-                        </div>
-                        <div class="h-px bg-slate-700 w-full mb-6 opacity-30"></div>
-                        <h4 class="text-emerald-400 font-black text-xl italic tracking-tight">Which of the following categories best describes this scenario?</h4>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                    <div id="choice-block" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                         ${displayOptions.map(opt => `<button onclick="handleLimitChoice(this, '${opt}', '${lv.correct}', '${lv.explanation}')" class="choice-btn bg-slate-800 border-2 border-slate-700 p-8 rounded-2xl font-bold text-xl italic shadow-lg hover:border-emerald-500 transition-all">${opt}</button>`).join('')}
                     </div>
                     <div id="explanation-container" class="hidden text-left bg-slate-950/80 p-10 rounded-[2.5rem] border-4 border-slate-800 shadow-2xl">
@@ -529,20 +523,31 @@
             const expContainer = document.getElementById('explanation-container');
             expContainer.classList.remove('hidden');
             const statusEl = document.getElementById('explanation-status');
-            statusEl.innerText = chosen === correct ? "Correct! Analysis Accurate" : "Wrong! Analysis Mismatch";
+            statusEl.innerText = chosen === correct ? "Correct!" : "Wrong!";
             statusEl.className = chosen === correct ? "text-emerald-400 text-3xl font-black mb-4 italic" : "text-rose-500 text-3xl font-black mb-4 italic";
             document.getElementById('explanation-text').innerText = explanation;
-            expContainer.scrollIntoView({ behavior: 'smooth' });
         }
 
-        function proceedToNextLimit() { state.modules[3].currentLevel++; if (state.modules[3].marks >= 10) handleModuleSuccess(); else renderLevel(); }
+        function proceedToNextLimit() { state.modules[3].currentLevel++; if (state.modules[3].marks >= state.modules[3].target) handleModuleSuccess(); else renderLevel(); }
 
         function handleModuleSuccess() {
             const mod = state.modules[state.currentModuleIdx];
             mod.completed = true;
             const next = state.modules[state.currentModuleIdx + 1];
-            if (next) { next.locked = false; showAlert("Mission Complete", "Clue found! Proceed to the next module.", "🔓", "Proceed", () => requestModuleAccess(state.currentModuleIdx + 1)); }
-            else document.getElementById('screen-content').innerHTML = `<div class="text-center space-y-12 mt-16"><div class="text-[120px]">🕵️‍♂️🏆</div><h2 class="text-7xl font-black text-white italic tracking-tighter">System Secured</h2><button onclick="location.reload()" class="bg-emerald-500 text-slate-950 font-black px-20 py-8 rounded-[3rem] text-2xl uppercase tracking-[0.2em] shadow-2xl">New Case</button></div>`;
+            if (next) { 
+                next.locked = false; 
+                showAlert("Mission Complete", "Next module unlocked.", "🔓", "Proceed", () => requestModuleAccess(state.currentModuleIdx + 1)); 
+            } else {
+                state.modules.forEach(m => { m.locked = false; m.authorized = true; });
+                showAlert("System Secured", "All levels decrypted! You can now revisit any module for free play.", "🕵️‍♂️🏆", "Free Play Mode", () => {
+                   document.getElementById('screen-content').innerHTML = `
+                    <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                        <div class="text-8xl">🏆</div>
+                        <h2 class="text-4xl font-black text-white italic">Master Detective Mode</h2>
+                        <p class="text-slate-400 max-w-md">All forensic modules are now fully decrypted. Select any module above to begin training again.</p>
+                    </div>`;
+                });
+            }
             updateUI();
         }
 
@@ -566,8 +571,8 @@
         function closeAdmin() { document.getElementById('admin-overlay').classList.add('hidden'); document.getElementById('admin-pass').value = ''; }
         function checkAdmin() {
             const p = document.getElementById('admin-pass').value;
-            if (p === atob(_K2)) { state.modules.forEach(m => { m.locked = false; m.authorized = true; if (m.id === 3) { m.marks = 0; m.completed = false; m.currentLevel = 0; } else { m.marks = m.target; m.completed = true; } }); showAlert("Super Admin", "All zones unlocked.", "🔓", "Proceed", () => { closeAdmin(); updateUI(); startModule(3); }); }
-            else if (p === atob(_K1)) { const next = state.modules.find(m => m.locked); if (next) { next.locked = false; next.authorized = true; const prev = state.modules[next.id - 1]; if (prev) { prev.marks = prev.target; prev.completed = true; } showAlert("Admin", `Bypassing to ${next.name}`, "🔑", "OK", () => { closeAdmin(); updateUI(); startModule(next.id); }); } }
+            if (p === atob(_K2)) { state.modules.forEach(m => { m.locked = false; m.authorized = true; m.marks = m.target; m.completed = true; }); showAlert("Super Admin", "All zones unlocked.", "🔓", "Proceed", () => { closeAdmin(); updateUI(); }); }
+            else if (p === atob(_K1)) { const next = state.modules.find(m => m.locked); if (next) { next.locked = false; next.authorized = true; showAlert("Admin", `Unlocked ${next.name}`, "🔑", "OK", () => { closeAdmin(); updateUI(); }); } }
         }
 
         setInterval(() => {
@@ -581,8 +586,6 @@
         window.onload = () => updateUI();
     </script>
 
-    <footer class="p-8 text-center text-slate-600 text-[11px] uppercase tracking-[0.4em] font-black">
-        Lam's Vibe Coding
-    </footer>
+    <footer class="p-8 text-center text-slate-600 text-[11px] uppercase tracking-[0.4em] font-black">Lam's Vibe Coding</footer>
 </body>
 </html>
