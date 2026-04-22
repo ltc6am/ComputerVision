@@ -30,6 +30,21 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
+    <!-- Deployment Key Overlay -->
+    <div id="auth-overlay" class="fixed inset-0 z-[300] bg-slate-950/98 backdrop-blur-xl flex items-center justify-center p-6 hidden">
+        <div class="bg-slate-900 border-2 border-emerald-500 p-8 rounded-[2.5rem] max-w-sm w-full text-center shadow-2xl">
+            <div class="bg-emerald-500/10 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-emerald-500/30">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <h3 id="auth-title" class="text-2xl font-black mb-2 text-white italic uppercase tracking-tighter">Module Locked</h3>
+            <p class="text-slate-400 mb-8 text-sm font-medium">Timer Paused. Enter the 6-digit deployment key to initialize this forensic mission.</p>
+            <input type="text" id="auth-key-input" maxlength="6" placeholder="******" 
+                class="w-full bg-slate-950 border-2 border-slate-800 p-5 rounded-2xl text-center text-4xl font-black tracking-[0.4em] text-emerald-500 outline-none focus:border-emerald-500 transition-all mb-6 mono">
+            <button onclick="verifyModuleKey()" class="w-full bg-emerald-500 text-slate-950 font-black py-4 rounded-xl hover:bg-emerald-400 transition-all uppercase tracking-widest shadow-lg">Unlock Module</button>
+            <p id="auth-error" class="text-rose-500 text-xs mt-4 font-bold hidden italic uppercase">Access Denied: Invalid Key</p>
+        </div>
+    </div>
+
     <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div class="flex items-center gap-4">
@@ -45,14 +60,25 @@
         </div>
     </header>
 
-    <nav class="bg-slate-900/50 border-b border-slate-800 p-2 overflow-x-auto">
-        <div id="module-menu" class="max-w-7xl mx-auto flex gap-3 px-4"></div>
+    <!-- Responsive Nav: flex-wrap + justify-center -->
+    <nav class="bg-slate-900/50 border-b border-slate-800 p-4">
+        <div id="module-menu" class="max-w-7xl mx-auto flex flex-wrap justify-center gap-4">
+            <!-- Dynamic Module Cards -->
+        </div>
     </nav>
 
     <main class="flex-1 max-w-6xl mx-auto w-full p-4 md:p-8">
         <div id="game-screen" class="bg-slate-900 rounded-[2.5rem] border border-slate-800 p-4 md:p-10 shadow-2xl min-h-[650px] relative flex flex-col">
-            <div id="screen-content" class="h-full flex flex-col items-center"></div>
+            <div id="screen-content" class="h-full flex flex-col items-center">
+                <!-- Initial screen before start -->
+                <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                    <div class="text-8xl">🕵️‍♂️</div>
+                    <h2 class="text-4xl font-black text-white italic">Forensic Terminal Offline</h2>
+                    <p class="text-slate-400 max-w-md">Select a module from the menu above and provide the decryption key to begin your investigation.</p>
+                </div>
+            </div>
 
+            <!-- Modals (Intro, Label, Msg, Admin) remain hidden until triggered -->
             <div id="intro-modal" class="hidden absolute inset-0 z-[150] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6">
                 <div class="bg-slate-900 border-2 border-emerald-500/50 p-8 rounded-[2rem] max-w-xl w-full">
                     <div class="flex items-center gap-4 mb-4">
@@ -106,19 +132,26 @@
         const _K1 = "TGFhYWFhYW0="; 
         const _K2 = "TGFhbUxhYW0="; 
 
+        // YOUR FOUR DIFFERENT RANDOM ACCESS KEYS
+        const MODULE_KEYS = {
+            0: "392015", // Game 1
+            1: "748209", // Game 2
+            2: "156384", // Game 3
+            3: "927401"  // Game 4
+        };
+
         const state = {
             modules: [
-                { id: 0, name: "RGB Forensics", icon: "🎨", marks: 0, target: 20, completed: false, locked: false, attemptsThisRound: 0, maxRoundAttempts: 100, concept: "Computers represent color as numeric data (RGB). Higher intensity values mean more signal. Hover over pixels to scan their numeric signature.", instruction: "Identify the signal signature matching the target RGB coordinates. Use the HUD probe to see data before you click." },
-                { id: 1, name: "Classification", icon: "🎯", marks: 0, target: 15, completed: false, locked: true, currentLevel: 0, totalLevels: 50, concept: "Image Classification groups data into categories based on visual features. AI uses facial landmarks to identify specific emotion classes.", instruction: "You are a detective interrogating a suspect. Analyze their emotions to find clues. Reach 15 marks to proceed." },
-                { id: 2, name: "Detection", icon: "🔎", marks: 0, target: 5, completed: false, locked: true, currentLevel: 0, totalLevels: 50, concept: "Detection identifies 'Where' objects are using bounding boxes. Each found object must be precisely labeled to train the AI model.", instruction: "Identify and label all signal sources in the room to secure the scene. Secure 5 areas to proceed." },
-                { id: 3, name: "Potentials & Limits", icon: "⚖️", marks: 0, target: 10, completed: false, locked: true, currentLevel: 0, totalLevels: 20, concept: "AI vision has high potential (Benefits) but also technical boundaries (Limitations).", instruction: "Review the evidence case study and identify the curriculum category. Gain 10 marks to win." }
+                { id: 0, name: "RGB Forensics", icon: "🎨", marks: 0, target: 20, completed: false, locked: false, authorized: false, attemptsThisRound: 0, maxRoundAttempts: 100, concept: "Computers represent color as numeric data (RGB).", instruction: "Identify the signal signature matching the target RGB coordinates." },
+                { id: 1, name: "Classification", icon: "🎯", marks: 0, target: 15, completed: false, locked: true, authorized: false, currentLevel: 0, concept: "Image Classification groups data into categories.", instruction: "Analyze suspect emotions to find clues." },
+                { id: 2, name: "Detection", icon: "🔎", marks: 0, target: 5, completed: false, locked: true, authorized: false, currentLevel: 0, concept: "Detection identifies 'Where' objects are.", instruction: "Label all signal sources in the room." },
+                { id: 3, name: "Potentials & Limits", icon: "⚖️", marks: 0, target: 10, completed: false, locked: true, authorized: false, currentLevel: 0, concept: "AI vision has benefits and limitations.", instruction: "Review evidence and identify the curriculum category." }
             ],
-            currentModuleIdx: 0,
+            currentModuleIdx: -1,
+            pendingModuleIdx: -1,
+            isAuthModalOpen: false,
+            elapsedSeconds: 0,
             rgbTries: 0,
-            startTime: Date.now(),
-            detectionAttempts: 0,
-            detectionSubCount: 0,
-            detectionRoundFailed: false,
             isTransitioning: false,
             classificationAnswered: false,
             limitationsAnswered: false,
@@ -143,7 +176,7 @@
             { case: "Scenario 3: Smart Braking", desc: "A self-driving car detects a child running onto the road and stops instantly.", zh: "自動駕駛汽車檢測到小孩衝出馬路並立即停下。", correct: "Enhance Safety & Convenience", explanation: "AI reacts faster than human reflex time, preventing accidents." },
             { case: "Scenario 4: The 6-Finger Error", desc: "An AI creates a photo of a hand, but it gives the hand 6 fingers by mistake.", zh: "人工智能生成的照片中，手部錯誤地出現了6根手指。", correct: "Lack of Human Context", explanation: "AI understands pixel patterns but lacks real-world understanding of anatomy." },
             { case: "Scenario 5: Face ID", desc: "A smartphone only unlocks when it sees the owner's face, keeping the data safe.", zh: "智能手機僅在看到主人的臉時解鎖，確保數據安全。", correct: "Secure Personalization", explanation: "Biometric identification recognizes and serves only its specific user." },
-            { case: "Scenario 6: Sun Glare", desc: "A camera is blinded by a direct beam of sunlight and cannot see the traffic light.", zh: "相機被陽光直射導致過曝，無法看清交通燈。", correct: "Environmental Sensitivity", explanation: "Extreme light changes like glare are significant limitations." },
+            { case: "Scenario 6: Sun Glare", desc: "A camera is blinded by a direct beam of sunlight and cannot see the traffic light.", zh: "相機被陽光直射導致過曝，無法看清交通燈。", correct: "Environmental Sensitivity", explanation: "Extreme light conditions like glare are a significant limitation." },
             { case: "Scenario 7: Camouflage", desc: "AI misses a green bag sitting on green grass because the colors are too similar.", zh: "AI 未能發現綠色草地上的綠色袋子，因為顏色太接近。", correct: "Environmental Sensitivity", explanation: "When target and background colors are too similar, AI struggles with contrast." },
             { case: "Scenario 8: Foggy Road", desc: "A computer cannot detect the car in front because of very thick smoke and fog.", zh: "由於濃煙和霧氣，電腦無法檢測到前方的車輛。", correct: "Environmental Sensitivity", explanation: "Weather conditions act as noise that blocks visual data." },
             { case: "Scenario 9: Smart Shopping", desc: "A supermarket uses AI to track items so customers can pay without waiting in line.", zh: "超市使用 AI 追蹤商品，讓顧客無需排隊即可付款。", correct: "Increase Automation & Efficiency", explanation: "Automating identification removes the bottleneck of human checkout lines." },
@@ -152,7 +185,7 @@
             { case: "Scenario 12: Personalized News", desc: "Your tablet recognizes your face and instantly displays your favorite apps.", zh: "你的平板電腦識別你的臉後，立即顯示你最喜愛的應用程序。", correct: "Secure Personalization", explanation: "AI uses individual features to deliver a customized user experience." },
             { case: "Scenario 13: 24/7 Patrol", desc: "An AI robot patrols a school all night without needing street lights using infrared CV.", zh: "一個使用紅外線電腦視覺的 AI 機器人在不需要路燈的情況下巡邏學校整個晚上。", correct: "Increase Automation & Efficiency", explanation: "AI provides tireless monitoring using sensors that exceed human vision." },
             { case: "Scenario 14: Polka-Dot Ghost", desc: "AI cannot find a person wearing a polka-dot shirt standing in front of a matching wall.", zh: "AI 找不到站在同樣波點牆壁前，穿著波點襯衫的人。", correct: "Environmental Sensitivity", explanation: "Complex patterns and background noise make it difficult for AI to detect object boundaries." },
-            { case: "Scenario 15: AI Anatomy Error", desc: "AI draws a human face with three eyes because it hasn't seen enough real faces.", zh: "AI 畫了一張有三隻眼睛的人臉，因為它沒有看過足夠的真實人臉。", correct: "Data Dependency & Bias", explanation: "AI models depend entirely on the quality and variety of data they were trained on." },
+            { case: "Scenario 15: AI Anatomy Error", desc: "AI draws a human face with three eyes because it hasn't seen enough real faces.", zh: "AI 畫了一張有三隻眼睛的人臉，因為它沒有看過足夠的真實人臉。", correct: "Data Dependency & Bias", explanation: "Training AI with unbalanced data sets leads to biased and inaccurate results." },
             { case: "Scenario 16: Reflection Trap", desc: "A self-driving car tries to avoid a car that is only a reflection in a glass building.", zh: "自動駕駛汽車試圖避開一輛僅僅是玻璃大樓反射出來的車。", correct: "Lack of Human Context", explanation: "AI lacks the common sense to distinguish between reflections and physical objects." },
             { case: "Scenario 17: Emergency Stop", desc: "AI vision detects a red light 200 meters away and starts slowing down before the human driver sees it.", zh: "AI 視覺檢測到 200 米外的紅燈，並在人類司機看到之前開始減速。", correct: "Enhance Safety & Convenience", explanation: "AI processing speed and range can prevent accidents through early detection." },
             { case: "Scenario 18: Gender Bias", desc: "An AI classification system consistently fails to recognize female faces in a company database.", zh: "一個 AI 分類系統在公司數據庫中始終無法識別女性面孔。", correct: "Data Dependency & Bias", explanation: "Training AI with unbalanced data sets leads to biased and inaccurate results." },
@@ -169,14 +202,45 @@
             const menu = document.getElementById('module-menu');
             menu.innerHTML = state.modules.map((m, idx) => `
                 <div class="module-card p-3 rounded-2xl flex items-center gap-3 ${state.currentModuleIdx === idx ? 'active' : ''} ${m.locked ? 'locked' : 'cursor-pointer hover:bg-slate-800'}" 
-                     onclick="${!m.locked ? `startModule(${idx})` : ''}">
+                     onclick="${!m.locked ? `requestModuleAccess(${idx})` : ''}">
                     <span class="text-xl">${m.icon}</span>
                     <div class="whitespace-nowrap">
                         <div class="text-[11px] font-black text-white uppercase italic">${m.name}</div>
-                        <div class="text-[9px] text-slate-500 uppercase font-bold">${m.completed ? 'SOLVED' : (m.locked ? 'LOCKED' : 'ACTIVE')}</div>
+                        <div class="text-[9px] text-slate-500 uppercase font-bold">${m.completed ? 'SOLVED' : (m.authorized ? 'UNLOCKED' : (m.locked ? 'LOCKED' : 'ACTIVE'))}</div>
                     </div>
                 </div>
             `).join('');
+        }
+
+        function requestModuleAccess(idx) {
+            const mod = state.modules[idx];
+            if (mod.authorized) {
+                startModule(idx);
+            } else {
+                state.pendingModuleIdx = idx;
+                state.isAuthModalOpen = true;
+                document.getElementById('auth-overlay').classList.remove('hidden');
+                document.getElementById('auth-title').innerText = `Lock: ${mod.name}`;
+                document.getElementById('auth-key-input').value = "";
+                document.getElementById('auth-key-input').focus();
+            }
+        }
+
+        function verifyModuleKey() {
+            const input = document.getElementById('auth-key-input').value;
+            const correctKey = MODULE_KEYS[state.pendingModuleIdx];
+            const errorMsg = document.getElementById('auth-error');
+
+            if (input === correctKey) {
+                state.isAuthModalOpen = false;
+                state.modules[state.pendingModuleIdx].authorized = true;
+                document.getElementById('auth-overlay').classList.add('hidden');
+                startModule(state.pendingModuleIdx);
+            } else {
+                errorMsg.classList.remove('hidden');
+                setTimeout(() => errorMsg.classList.add('hidden'), 2000);
+                document.getElementById('auth-key-input').value = "";
+            }
         }
 
         function startModule(idx) {
@@ -210,6 +274,7 @@
             else if (module.id === 3) renderLimitations(container, module);
         }
 
+        // Logic functions for RGB, Classification, Detection, Limitations remain the same as the original game...
         function renderRGB(container, module) {
             if (module.attemptsThisRound >= module.maxRoundAttempts) {
                 if (module.marks < module.target) return showRetryScreen(container);
@@ -315,7 +380,7 @@
         }
 
         function renderClassification(container, module) {
-            state.classificationAnswered = false; // RESET LOCK
+            state.classificationAnswered = false; 
             const item = chartData[Math.floor(Math.random() * chartData.length)];
             const wrongItem = chartData.find(c => c.name !== item.name);
             const options = [item.name, wrongItem.name].sort(() => Math.random() - 0.5);
@@ -417,7 +482,7 @@
         }
 
         function renderLimitations(container, module) {
-            state.limitationsAnswered = false; // RESET LOCK
+            state.limitationsAnswered = false; 
             const lv = curriculumCases[module.currentLevel % curriculumCases.length];
             const displayOptions = [...allPotentialLimits].sort(() => Math.random() - 0.5);
             container.innerHTML = `
@@ -474,8 +539,8 @@
             const mod = state.modules[state.currentModuleIdx];
             mod.completed = true;
             const next = state.modules[state.currentModuleIdx + 1];
-            if (next) { next.locked = false; showAlert("Mission Complete", "Clue found! Go to the next mission to find more clues.", "🔓", "Proceed", () => startModule(state.currentModuleIdx + 1)); }
-            else document.getElementById('screen-content').innerHTML = `<div class="text-center space-y-12 mt-16"><div class="text-[120px] drop-shadow-2xl">🕵️‍♂️🏆</div><h2 class="text-7xl font-black text-white italic tracking-tighter">System Secured</h2><p class="text-slate-400 text-xl max-w-lg mx-auto font-medium leading-relaxed italic">The Data Phantom has been apprehended. Forensic training is 100% complete.</p><button onclick="location.reload()" class="bg-emerald-500 text-slate-950 font-black px-20 py-8 rounded-[3rem] text-2xl uppercase tracking-[0.2em] shadow-2xl active-pulse">New Case</button></div>`;
+            if (next) { next.locked = false; showAlert("Mission Complete", "Clue found! Go to the next mission.", "🔓", "Proceed", () => requestModuleAccess(state.currentModuleIdx + 1)); }
+            else document.getElementById('screen-content').innerHTML = `<div class="text-center space-y-12 mt-16"><div class="text-[120px] drop-shadow-2xl">🕵️‍♂️🏆</div><h2 class="text-7xl font-black text-white italic tracking-tighter">System Secured</h2><button onclick="location.reload()" class="bg-emerald-500 text-slate-950 font-black px-20 py-8 rounded-[3rem] text-2xl uppercase tracking-[0.2em] shadow-2xl">New Case</button></div>`;
             updateUI();
         }
 
@@ -494,23 +559,26 @@
             input.onkeypress = (e) => { if (e.key === 'Enter') btn.onclick(); };
         }
 
-        function showRetryScreen(container) { container.innerHTML = `<div class="text-center"><div class="text-9xl mb-8">⚠️</div><h2 class="text-5xl font-black text-rose-500 mb-12 uppercase italic tracking-tighter">Signal Failure</h2><button onclick="state.modules[0].marks=0;state.modules[0].attemptsThisRound=0;state.currentRGBData=null;renderLevel()" class="bg-white text-slate-950 px-12 py-6 rounded-2xl font-black shadow-2xl text-xl hover:bg-slate-200">Reboot Scanner</button></div>`; }
+        function showRetryScreen(container) { container.innerHTML = `<div class="text-center"><h2 class="text-5xl font-black text-rose-500 mb-12 uppercase italic tracking-tighter">Signal Failure</h2><button onclick="state.modules[0].marks=0;state.modules[0].attemptsThisRound=0;state.currentRGBData=null;renderLevel()" class="bg-white text-slate-950 px-12 py-6 rounded-2xl font-black">Reboot Scanner</button></div>`; }
         function showAdminPrompt() { document.getElementById('admin-overlay').classList.remove('hidden'); document.getElementById('admin-pass').focus(); }
         function closeAdmin() { document.getElementById('admin-overlay').classList.add('hidden'); document.getElementById('admin-pass').value = ''; }
         function checkAdmin() {
             const p = document.getElementById('admin-pass').value;
-            if (p === atob(_K2)) { state.modules.forEach(m => { m.locked = false; if (m.id === 3) { m.marks = 0; m.completed = false; m.currentLevel = 0; } else { m.marks = m.target; m.completed = true; } }); showAlert("Super Admin", "All zones unlocked.", "🔓", "Proceed", () => { closeAdmin(); updateUI(); startModule(3); }); }
-            else if (p === atob(_K1)) { const next = state.modules.find(m => m.locked); if (next) { next.locked = false; const prev = state.modules[next.id - 1]; if (prev) { prev.marks = prev.target; prev.completed = true; } showAlert("Admin", `Bypassing to ${next.name}`, "🔑", "OK", () => { closeAdmin(); updateUI(); startModule(next.id); }); } }
+            if (p === atob(_K2)) { state.modules.forEach(m => { m.locked = false; m.authorized = true; if (m.id === 3) { m.marks = 0; m.completed = false; m.currentLevel = 0; } else { m.marks = m.target; m.completed = true; } }); showAlert("Super Admin", "All zones unlocked.", "🔓", "Proceed", () => { closeAdmin(); updateUI(); startModule(3); }); }
+            else if (p === atob(_K1)) { const next = state.modules.find(m => m.locked); if (next) { next.locked = false; next.authorized = true; const prev = state.modules[next.id - 1]; if (prev) { prev.marks = prev.target; prev.completed = true; } showAlert("Admin", `Bypassing to ${next.name}`, "🔑", "OK", () => { closeAdmin(); updateUI(); startModule(next.id); }); } }
         }
 
         setInterval(() => {
-            const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
-            const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
-            const s = (elapsed % 60).toString().padStart(2, '0');
+            // TIMER PAUSES IF AUTH MODAL IS OPEN OR GAME NOT STARTED
+            if (state.currentModuleIdx === -1 || state.isAuthModalOpen) return;
+            
+            state.elapsedSeconds++;
+            const m = Math.floor(state.elapsedSeconds / 60).toString().padStart(2, '0');
+            const s = (state.elapsedSeconds % 60).toString().padStart(2, '0');
             document.getElementById('timer').innerText = `${m}:${s}`;
         }, 1000);
 
-        window.onload = () => startModule(0);
+        window.onload = () => updateUI();
     </script>
 
     <footer class="p-8 text-center text-slate-600 text-[11px] uppercase tracking-[0.4em] font-black">
